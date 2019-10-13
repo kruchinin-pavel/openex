@@ -12,6 +12,7 @@ import org.openex.seda.services.PlainMemorySedaFactory;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -45,14 +46,13 @@ public class MessageLooserTest {
     public void test() {
         MessageEnveloper<Integer> rcv = factory.getEnveloper();
         MessageLooser<Integer> loser = new MessageLooser<>();
-        loser.messageLostProbability = 0.05;
+        loser.setLoseFunction(v -> ThreadLocalRandom.current().nextDouble() < 0.05);
         MessageSequencer<Integer> seq = factory.sequencer();
         factory.connect(rcv, loser);
         factory.connect(loser, seq);
         for (int i = 0; i < 1_000; i++) rcv.send(i);
         assertFalse(seq.isConsistent());
         assertTrue(seq.shouldRestore());
-
     }
 
 }

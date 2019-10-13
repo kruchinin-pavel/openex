@@ -9,15 +9,20 @@ import org.openex.seda.services.OutputGetter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 
 public class MessageLooser<T> implements InputGetter<T>, OutputGetter<T> {
     private static final Logger log = LoggerFactory.getLogger(MessageLooser.class);
     private final ConsumerInputEndpoint<T> output = new ConsumerInputEndpoint<>();
-    long looseMessageSeq = -1;
-    double messageLostProbability;
 
     MessageLooser() {
+    }
+
+    private Function<Envelope<T>, Boolean> loseFunction = v -> false;
+
+    public MessageLooser<T> setLoseFunction(Function<Envelope<T>, Boolean> loseFunction) {
+        this.loseFunction = loseFunction;
+        return this;
     }
 
     @Override
@@ -31,9 +36,7 @@ public class MessageLooser<T> implements InputGetter<T>, OutputGetter<T> {
     }
 
     private void send(Envelope<T> msg) {
-        boolean looseNextMessage = looseMessageSeq == msg.seq ||
-                ThreadLocalRandom.current().nextDouble() < messageLostProbability;
-        if (!looseNextMessage) {
+        if (!loseFunction.apply(msg)) {
             output.send(msg);
         } else {
             log.info("Loosing message: {}", msg);
