@@ -2,6 +2,7 @@ package org.openex.orderbook.stress;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -25,6 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 @RunWith(Parameterized.class)
+@Ignore
 public class SedaMessageLostTest {
     private static final Logger logger = LoggerFactory.getLogger(SedaMessageLostTest.class);
     private static final int REDUNDANCY_COUNT = 3;
