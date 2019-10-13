@@ -7,6 +7,8 @@ import java.util.Iterator;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 public class RandomOrders {
 
@@ -21,6 +23,10 @@ public class RandomOrders {
 
     private static Iterable<Order> endless() {
         return limit(-1);
+    }
+
+    public static Stream<Order> limitStream(long orderNumber) {
+        return StreamSupport.stream(limit(orderNumber).spliterator(), false);
     }
 
     public static Iterable<Order> limit(long orderNumber) {

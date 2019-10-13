@@ -38,11 +38,10 @@ public class OrderFile {
                 @Override
                 public String next() {
                     return Encoder.instance.serializeOrder(iterator.next());
-
                 }
             });
         } catch (IOException e) {
-            throw new RuntimeException();
+            throw new RuntimeException(e);
         }
     }
 }
