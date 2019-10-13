@@ -35,32 +35,23 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(Parameterized.class)
 public class SedaMessageLostTest {
-    private static final int REDUNDANCY_COUNT = 3;
-    private static final int MAKE_SNAPSHOT_EVERY_MESSAGE_NO = 10;
-    private static final AtomicInteger testCount = new AtomicInteger();
-    private static final AtomicInteger constCount = new AtomicInteger();
+    private static final AtomicInteger instCount = new AtomicInteger();
     private final Logger logger;
+    private final List<Order> orders;
     private final OrderBook sampleBook = OrderBook.treeMap();
-    private final Stream<Order> orders;
-    private final long instance;
+    private final int instance = instCount.getAndIncrement();
     private final List<Trade> sampleTrades = new ArrayList<>();
     private final List<Trade> resultTrades = new ArrayList<>();
-    private final List<Container<BookEvent, OrderBook>> redundandContainers = new LinkedList<>();
-    private final MessageEnveloper<BookEvent> orderInput;
 
-    private final MessageSequencer<BookEvent> tradesSummarizer;
-    private final AbstractSedaFactory<BookEvent, OrderBook> factory;
-
-
-    public SedaMessageLostTest(Supplier<AbstractSedaFactory<BookEvent, OrderBook>> factorySup,
-                               Supplier<Stream<Order>> orders,
+    public SedaMessageLostTest(Function<Integer, AbstractSedaFactory<BookEvent, OrderBook>> factorySup,
+                               Supplier<Stream<Order>> ordersSup,
                                Function<Envelope<BookEvent>, Boolean> func) throws IOException {
 
-        this.factory = factorySup.get();
-        this.orders = orders.get();
-        instance = constCount.incrementAndGet();
+        this.factory = factorySup.apply(instance);
+        this.orders = ordersSup.get().collect(Collectors.toList());
         Path path = Paths.get("build/SedaMessageLostTest/inst_" + instance);
         Files.createDirectories(path);
+        OrderFile.write("build/SedaMessageLostTest/inst_" + instance + "/orders.csv", orders);
         logger = LoggerFactory.getLogger(getClass() + ":" + instance);
         logger.info("Starting test: {}", instance);
         sampleBook.onTrade(sampleTrades::add);
@@ -92,11 +83,18 @@ public class SedaMessageLostTest {
         }));
     }
 
+    private static final int REDUNDANCY_COUNT = 3;
+    private static final int MAKE_SNAPSHOT_EVERY_MESSAGE_NO = 10;
+    private final List<Container<BookEvent, OrderBook>> redundandContainers = new LinkedList<>();
+    private final MessageEnveloper<BookEvent> orderInput;
+    private final MessageSequencer<BookEvent> tradesSummarizer;
+    private final AbstractSedaFactory<BookEvent, OrderBook> factory;
+
     @Parameterized.Parameters
     public static List<Object[]> params() {
-        List<Supplier<AbstractSedaFactory<BookEvent, OrderBook>>> factories = Arrays.asList(
-                PlainMemorySedaFactory::create,
-                () -> OrderBookContainee.factory("build/SedaMessageLostTest/chronicle_" + testCount.incrementAndGet())
+        List<Function<Integer, AbstractSedaFactory<BookEvent, OrderBook>>> factories = Arrays.asList(
+                instance -> PlainMemorySedaFactory.create(),
+                instance -> OrderBookContainee.factory("build/SedaMessageLostTest/inst_" + instance + "/chronicle")
         );
         List<Order> randomOrderList = RandomOrders.limitStream(1_000).collect(Collectors.toList());
         List<Supplier<Stream<Order>>> orders = Arrays.asList(
