@@ -72,23 +72,24 @@ public class SedaMessageLostTest {
         factory.connect(tradesSummarizer, () -> msg -> msg.forEach(v -> {
             resultTrades.add((Trade) v);
         }));
-
         looser.setLoseFunction(func);
     }
 
     @Parameterized.Parameters
     public static List<Object[]> params() {
+        List<Supplier<AbstractSedaFactory<BookEvent, OrderBook>>> factories = Arrays.asList(
+                PlainMemorySedaFactory::create,
+                () -> OrderBookContainee.factory("build/SedaMessageLostTest_" + testCount.incrementAndGet())
+        );
         List<Order> randomOrderList = RandomOrders.limitStream(1_000).collect(Collectors.toList());
         List<Supplier<Stream<Order>>> orders = Arrays.asList(
-                OrderFile.read("src/test/external_resources/inputOrders.csv"), randomOrderList::stream);
-        List<Function<Envelope<BookEvent>, Boolean>> loseFunctions = Arrays.asList(
+                OrderFile.read("src/test/external_resources/inputOrders.csv"),
+                randomOrderList::stream);
+        List<Function<Envelope<BookEvent>, Boolean>> lostFuncs = Arrays.asList(
                 v -> ThreadLocalRandom.current().nextDouble() < 0.01, v -> v.seq == 113);
         List<Object[]> params = new ArrayList<>();
-        orders.forEach(ord -> loseFunctions.forEach(lose -> {
-            params.add(new Object[]{(Supplier<AbstractSedaFactory<BookEvent, OrderBook>>) PlainMemorySedaFactory::create,
-                    ord, lose});
-            params.add(new Object[]{OrderBookContainee.factory("build/SedaMessageLostTest_" + testCount.incrementAndGet()), ord, lose});
-        }));
+        factories.forEach(factory -> lostFuncs.forEach(lostFunc -> orders.forEach(ord ->
+                params.add(new Object[]{factory, ord, lostFunc}))));
         return params;
     }
 
