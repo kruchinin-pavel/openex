@@ -19,16 +19,19 @@ import org.openex.seda.services.PlainMemorySedaFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.junit.Assert.assertEquals;
 
 @RunWith(Parameterized.class)
 public class SedaMessageLostTest {
@@ -43,17 +46,21 @@ public class SedaMessageLostTest {
     private final List<Trade> sampleTrades = new ArrayList<>();
     private final List<Trade> resultTrades = new ArrayList<>();
     private final List<Container<BookEvent, OrderBook>> redundandContainers = new LinkedList<>();
-    private MessageEnveloper<BookEvent> orderInput;
-    private MessageLooser<BookEvent> looser;
-    private MessageSequencer<BookEvent> tradesSummarizer;
-    private AbstractSedaFactory<BookEvent, OrderBook> factory;
+    private final MessageEnveloper<BookEvent> orderInput;
+
+    private final MessageSequencer<BookEvent> tradesSummarizer;
+    private final AbstractSedaFactory<BookEvent, OrderBook> factory;
+
 
     public SedaMessageLostTest(Supplier<AbstractSedaFactory<BookEvent, OrderBook>> factorySup,
                                Supplier<Stream<Order>> orders,
-                               Function<Envelope<BookEvent>, Boolean> func) {
+                               Function<Envelope<BookEvent>, Boolean> func) throws IOException {
+
         this.factory = factorySup.get();
         this.orders = orders.get();
         instance = constCount.incrementAndGet();
+        Path path = Paths.get("build/SedaMessageLostTest/inst_" + instance);
+        Files.createDirectories(path);
         logger = LoggerFactory.getLogger(getClass() + ":" + instance);
         logger.info("Starting test: {}", instance);
         sampleBook.onTrade(sampleTrades::add);
@@ -62,7 +69,18 @@ public class SedaMessageLostTest {
         for (int i = 0; i < REDUNDANCY_COUNT; i++) {
             Container<BookEvent, OrderBook> ordBook = factory.container("" + i, OrderBookContainee::new);
             ordBook.makeSnapshotEveryMessageNo(MAKE_SNAPSHOT_EVERY_MESSAGE_NO);
-            looser = new MessageLooser<>();
+            MessageLooser<BookEvent> looser = new MessageLooser<>();
+            if (i == REDUNDANCY_COUNT - 1) looser.setLoseFunction(v -> {
+                Boolean ret = func.apply(v);
+                if (ret) {
+                    try {
+                        Files.write(Paths.get(path.toString(), "skipped.csv"), Collections.singleton("" + v.seq));
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                return ret;
+            });
             factory.connect(orderInput, looser);
             factory.connect(looser, ordBook);
             factory.connect(ordBook, tradesSummarizer);
@@ -72,14 +90,13 @@ public class SedaMessageLostTest {
         factory.connect(tradesSummarizer, () -> msg -> msg.forEach(v -> {
             resultTrades.add((Trade) v);
         }));
-        looser.setLoseFunction(func);
     }
 
     @Parameterized.Parameters
     public static List<Object[]> params() {
         List<Supplier<AbstractSedaFactory<BookEvent, OrderBook>>> factories = Arrays.asList(
                 PlainMemorySedaFactory::create,
-                () -> OrderBookContainee.factory("build/SedaMessageLostTest_" + testCount.incrementAndGet())
+                () -> OrderBookContainee.factory("build/SedaMessageLostTest/chronicle_" + testCount.incrementAndGet())
         );
         List<Order> randomOrderList = RandomOrders.limitStream(1_000).collect(Collectors.toList());
         List<Supplier<Stream<Order>>> orders = Arrays.asList(
@@ -106,14 +123,14 @@ public class SedaMessageLostTest {
         Assert.assertTrue(totalTradesCount.get() > 0);
     }
 
-    protected int validate() {
+    private int validate() {
         int tradesOccured = sampleTrades.size();
         for (Container<BookEvent, OrderBook> container : redundandContainers) {
             if (!container.isConsistent(tradesSummarizer.getLastSeq())) continue;
             OrderBookContainee ordBook = container.getContainee();
-            Assert.assertEquals("Comparing " + ordBook.id, sampleBook, ordBook.book);
+            assertEquals("Comparing " + ordBook.id, sampleBook, ordBook.book);
         }
-        Assert.assertEquals(sampleTrades, resultTrades);
+        assertEquals(sampleTrades, resultTrades);
         sampleTrades.clear();
         resultTrades.clear();
         return tradesOccured;
