@@ -1,0 +1,35 @@
+apply plugin: 'java'
+apply plugin: 'java-library-distribution'
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+archivesBaseName = 'orderbook'
+repositories {
+    mavenCentral()
+}
+
+task srcZip(type: Zip) {
+    classifier = 'src'
+    from projectDir
+    include 'src/**/*'
+    include 'build.gradle'
+    include 'exchange.sh'
+    include 'README.md'
+}
+
+dependencies {
+    compile 'org.slf4j:slf4j-api:1.7.26'
+    compile 'org.slf4j:jcl-over-slf4j:1.7.26'
+    compile 'ch.qos.logback:logback-classic:1.2.3'
+    // https://mvnrepository.com/artifact/net.openhft/chronicle-queue
+    compile group: 'net.openhft', name: 'chronicle-queue', version: '5.17.22'
+
+//    compile group: 'com.google.guava', name: 'guava', version: '28.0-jre'
+    testCompile 'junit:junit:4.12'
+}
+
+jar {
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/*.MF'
+    manifest {
+        attributes 'Main-Class': 'org.kpa.bitmex.orderbook.ConsoleProcessor'
+    }
+}
