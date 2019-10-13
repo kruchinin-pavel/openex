@@ -8,6 +8,7 @@ import org.openex.orderbook.Order;
 import org.openex.orderbook.OrderBook;
 import org.openex.seda.AbstractSedaFactory;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -22,6 +23,7 @@ public class SedaMessageLostTest extends SedaMessageLostAbstract {
     @Test
     public void testMessageLostAtNumber() {
         looser.looseMessageSeq = 10;
+        AtomicInteger iteration = new AtomicInteger();
         orders.forEach(order -> {
             logger.info("Order: {}", order);
             sampleBook.accept(order);

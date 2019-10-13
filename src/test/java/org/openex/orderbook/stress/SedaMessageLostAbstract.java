@@ -23,6 +23,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class SedaMessageLostAbstract {
@@ -54,16 +55,17 @@ public class SedaMessageLostAbstract {
     @Parameterized.Parameters
     public static List<Object[]> params() {
         Supplier<Stream<Order>> fixedOrders = OrderFile.read("src/test/external_resources/inputOrders.csv");
-        Supplier<Stream<Order>> randomOrders = () -> RandomOrders.limitStream(1_000);
+        List<Order> randomOrderList = RandomOrders.limitStream(1_000).collect(Collectors.toList());
+        Supplier<Stream<Order>> randomOrders = randomOrderList::stream;
         return Arrays.asList(
                 new Object[]{(Supplier<AbstractSedaFactory<BookEvent, OrderBook>>) PlainMemorySedaFactory::create,
                         fixedOrders},
                 new Object[]{(Supplier<AbstractSedaFactory<BookEvent, OrderBook>>) PlainMemorySedaFactory::create,
-                        randomOrders},
-                new Object[]{OrderBookContainee.factory("build/SedaMessageLostTest" + testCount.incrementAndGet()),
-                        fixedOrders},
-                new Object[]{OrderBookContainee.factory("build/SedaMessageLostTest" + testCount.incrementAndGet()),
-                        randomOrders}
+                        randomOrders}//,
+//                new Object[]{OrderBookContainee.factory("build/SedaMessageLostTest_" + testCount.incrementAndGet()),
+//                        fixedOrders},
+//                new Object[]{OrderBookContainee.factory("build/SedaMessageLostTest_" + testCount.incrementAndGet()),
+//                        randomOrders}
         );
     }
 
