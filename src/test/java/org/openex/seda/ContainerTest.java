@@ -68,6 +68,21 @@ public class ContainerTest {
         assertEquals(snapshot, restoredSnapshot);
     }
 
+    @Test
+    public void testRecovery() {
+        MessageEnveloper<Integer> enveloper = factory.getEnveloper();
+        Container<Integer, String> cntn1 = factory.container("1", TestContainee::new).start();
+        factory.connect(factory.input(), cntn1);
+
+        // Send half of messages
+        for (int i = 0; i < MAX_VAL; i++) enveloper.send(i);
+        factory.getInput().pollLast();
+
+        Snapshot<String> snapshot = cntn1.backupSnapshot();
+        Snapshot<String> restoredSnapshot = factory.getSnapshotSource().get();
+        assertEquals(snapshot, restoredSnapshot);
+    }
+
 
     @Test
     public void test() {

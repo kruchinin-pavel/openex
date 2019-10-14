@@ -35,6 +35,9 @@ import static org.junit.Assert.assertEquals;
 
 @RunWith(Parameterized.class)
 public class SedaMessageLostTest {
+    private static final int REDUNDANCY_COUNT = 3;
+    private static final int MAKE_SNAPSHOT_EVERY_MESSAGE_NO = 10;
+
     private static final AtomicInteger instCount = new AtomicInteger();
     private final Logger logger;
     private final List<Order> orders;
@@ -42,6 +45,42 @@ public class SedaMessageLostTest {
     private final int instance = instCount.getAndIncrement();
     private final List<Trade> sampleTrades = new ArrayList<>();
     private final List<Trade> resultTrades = new ArrayList<>();
+    private final List<Container<BookEvent, OrderBook>> redundandContainers = new LinkedList<>();
+    private final MessageEnveloper<BookEvent> orderInput;
+    private final MessageSequencer<BookEvent> tradesSummarizer;
+    private final AbstractSedaFactory<BookEvent, OrderBook> factory;
+
+    @Parameterized.Parameters
+    public static List<Object[]> params() {
+        List<Function<Integer, AbstractSedaFactory<BookEvent, OrderBook>>> factories = Arrays.asList(
+                instance -> PlainMemorySedaFactory.create()
+//                instance -> OrderBookContainee.factory("build/SedaMessageLostTest/inst_" + instance + "/chronicle")
+        );
+        List<Order> randomOrderList = RandomOrders.limitStream(1_000).collect(Collectors.toList());
+        List<Supplier<Stream<Order>>> orders = Arrays.asList(
+                OrderFile.read("src/test/external_resources/inputOrders.csv")
+//                randomOrderList::stream
+        );
+        List<Function<Envelope<BookEvent>, Boolean>> lostFuncs = Arrays.asList(
+                v -> ThreadLocalRandom.current().nextDouble() < 0.01, v -> v.seq == 113);
+        List<Object[]> params = new ArrayList<>();
+        factories.forEach(factory -> lostFuncs.forEach(lostFunc -> orders.forEach(ord ->
+                params.add(new Object[]{factory, ord, lostFunc}))));
+        return params;
+    }
+
+    @Test
+    public void testMessageLostRandomly() {
+        AtomicInteger totalTradesCount = new AtomicInteger();
+        orders.forEach(order -> {
+            logger.info("Order: {}", order);
+            sampleBook.accept(order);
+            orderInput.send(order);
+            totalTradesCount.addAndGet(validate());
+        });
+        validate();
+        Assert.assertTrue(totalTradesCount.get() > 0);
+    }
 
     public SedaMessageLostTest(Function<Integer, AbstractSedaFactory<BookEvent, OrderBook>> factorySup,
                                Supplier<Stream<Order>> ordersSup,
@@ -83,49 +122,14 @@ public class SedaMessageLostTest {
         }));
     }
 
-    private static final int REDUNDANCY_COUNT = 3;
-    private static final int MAKE_SNAPSHOT_EVERY_MESSAGE_NO = 10;
-    private final List<Container<BookEvent, OrderBook>> redundandContainers = new LinkedList<>();
-    private final MessageEnveloper<BookEvent> orderInput;
-    private final MessageSequencer<BookEvent> tradesSummarizer;
-    private final AbstractSedaFactory<BookEvent, OrderBook> factory;
-
-    @Parameterized.Parameters
-    public static List<Object[]> params() {
-        List<Function<Integer, AbstractSedaFactory<BookEvent, OrderBook>>> factories = Arrays.asList(
-                instance -> PlainMemorySedaFactory.create(),
-                instance -> OrderBookContainee.factory("build/SedaMessageLostTest/inst_" + instance + "/chronicle")
-        );
-        List<Order> randomOrderList = RandomOrders.limitStream(1_000).collect(Collectors.toList());
-        List<Supplier<Stream<Order>>> orders = Arrays.asList(
-                OrderFile.read("src/test/external_resources/inputOrders.csv"),
-                randomOrderList::stream);
-        List<Function<Envelope<BookEvent>, Boolean>> lostFuncs = Arrays.asList(
-                v -> ThreadLocalRandom.current().nextDouble() < 0.01, v -> v.seq == 113);
-        List<Object[]> params = new ArrayList<>();
-        factories.forEach(factory -> lostFuncs.forEach(lostFunc -> orders.forEach(ord ->
-                params.add(new Object[]{factory, ord, lostFunc}))));
-        return params;
-    }
-
-    @Test
-    public void testMessageLostRandomly() {
-        AtomicInteger totalTradesCount = new AtomicInteger();
-        orders.forEach(order -> {
-            logger.info("Order: {}", order);
-            sampleBook.accept(order);
-            orderInput.send(order);
-            totalTradesCount.addAndGet(validate());
-        });
-        validate();
-        Assert.assertTrue(totalTradesCount.get() > 0);
-    }
-
     private int validate() {
         int tradesOccured = sampleTrades.size();
+        logger.info("sampleBook: {}", sampleBook);
         for (Container<BookEvent, OrderBook> container : redundandContainers) {
             if (!container.isConsistent(tradesSummarizer.getLastSeq())) continue;
             OrderBookContainee ordBook = container.getContainee();
+            logger.info("resBook: {}", ordBook);
+            if (sampleBook.equals(ordBook)) logger.error("Not equal!!!");
             assertEquals("Comparing " + ordBook.id, sampleBook, ordBook.book);
         }
         assertEquals(sampleTrades, resultTrades);

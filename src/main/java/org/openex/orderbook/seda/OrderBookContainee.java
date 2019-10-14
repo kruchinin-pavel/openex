@@ -20,6 +20,7 @@ import static java.util.Objects.requireNonNull;
 public class OrderBookContainee extends Containee<BookEvent, OrderBook> {
     private final Logger log;
     public OrderBook book = OrderBook.treeMap();
+    private Envelope<BookEvent> lastMessage;
 
     public OrderBookContainee(String id) {
         super(id);
@@ -76,6 +77,7 @@ public class OrderBookContainee extends Containee<BookEvent, OrderBook> {
             if (msg instanceof Order) {
                 book.accept(((Order) msg).clone());
             }
+            lastMessage = envelope;
         });
     }
 
@@ -83,6 +85,7 @@ public class OrderBookContainee extends Containee<BookEvent, OrderBook> {
     public String toString() {
         return "OrderBookContainee{" +
                 "id=" + id +
+                ", lastMessage=" + lastMessage +
                 ", book=" + book +
                 '}';
     }

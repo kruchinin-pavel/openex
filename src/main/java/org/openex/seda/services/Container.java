@@ -43,8 +43,9 @@ public class Container<E, S> implements InputGetter<E>, OutputGetter<E> {
         nextSnapshotInMessages = makeSnapshotEveryMessageNo;
         sequencer.setOnInconsistent(v -> {
             if (sequencer.shouldRestore()) {
+                log.info("Restoring state: {}", getContainee());
                 stateManager.restart(id);
-                log.info("Restored state: {}", getContainee());
+                log.info("Restoring state: {}", getContainee());
             }
         });
     }
